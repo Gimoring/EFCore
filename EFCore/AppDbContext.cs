@@ -23,7 +23,8 @@ namespace EFCore
         public DbSet<Item> Items { get; set; }
 
         // 간접적으로 접근하는 테이블은 굳이 만들어주지 않아도 알아서 EF Core에게 알려준다. => player 만들 필요 없음.
-        //public DbSet<Player> Players { get; set; }
+        public DbSet<Player> Players { get; set; }
+        public DbSet<Guild> Guilds { get; set; }
 
         // DB ConnectionString
         // 어떤 DB를 어떻게 연결해라 (각종 설정, authorization 등)
