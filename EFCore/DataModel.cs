@@ -57,6 +57,7 @@ namespace EFCore
     // -역할 : DB에 접근하는 애를 컨텐츠에 넘기기전에 재가공
     public class GuildDto
     {
+        public int GuildId { get; set; }
         public string Name { get; set; }
         public int MemberCount { get; set; }
     }

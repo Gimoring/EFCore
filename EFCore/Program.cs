@@ -12,9 +12,9 @@ namespace EFCore
             // CRUD
             Console.WriteLine("명령어를 입력하세요");
             Console.WriteLine("[0] Force Reset");
-            Console.WriteLine("[1] Eager Loading"); // 즉시
-            Console.WriteLine("[2] Explicit Loading"); // 명시적
-            Console.WriteLine("[3] Select Loading"); // Select
+            Console.WriteLine("[1] Update (Reload)");
+            Console.WriteLine("[2] Update (Full)");
+
 
             while (true)
             {
@@ -26,13 +26,12 @@ namespace EFCore
                         DbCommands.InitializeDB(forceReset: true);
                         break;
                     case "1":
-                        DbCommands.EagerLoading();
+                        DbCommands.UpdateByReload();
                         break;
                     case "2":
-                        DbCommands.ExplicitLoading();
+                        DbCommands.UpdateByFull();
                         break;
                     case "3":
-                        DbCommands.SelectLoading();
                         break;
                         
                 }

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,11 +28,18 @@ namespace EFCore
             }
         }
 
+        // 이미 존재하는 사용자를 연동하려면?
+        // 1) Tracked Instance (추적되고 있는 객체)를 얻어와서
+        // 2) 데이터 연결
+
         public static void CreateTestData(AppDbContext db)
         {
             var junpil = new Player() { Name = "Junpil" };
             var munyoung = new Player() { Name = "Munyoung" };
             var yujin = new Player() { Name = "Yujin" };
+
+            // 1) Detached
+            Console.WriteLine(db.Entry(yujin).State);
 
             List<Item> items = new List<Item>()
             { 
@@ -61,86 +69,86 @@ namespace EFCore
                 Members = new List<Player>() { munyoung, yujin, junpil }
             };
 
-            // 하나만 넣을 경우 db.items.add(item);
             db.Items.AddRange(items);
             db.Guilds.Add(guild);
             db.SaveChanges();
+
         }
 
-        // 1 + 2) 특정 길드에 있는 길드원들이 소지한 모든 아이템들을 보고 싶다!
-        // 장점 : DB 접근 한 번으로 다 로딩 (JOIN)
-        // 단점 : 다 필요한지 모르겠는데도 다 가져옴.
-        public static void EagerLoading()
+
+        // Update 3단계
+        // 1) Tracked Entity를 얻어 온다.
+        // 2) Entity 클래스의 property를 변경 (set)
+        // 3) SaveChanges 호출
+
+        // (Connected vs Disconnected) Update
+        // Disconnected : Update 단계가 한 번에 쭉 일어나지 않고, 끊기는 경우
+        // (REST API 등) ex) 먼저 데이터를 불러와서 보여주고 나~중에 업데이트 하는 식
+        // 처리하는 2가지 방법
+        // 1) Reload 방식. 필요한 정보만 보내서, 1-2-3 Step
+        // 2) Full Update 방식. 모든 정보를 다 보내고 받아서, 아예 Entity를 다시 만들고 통으로 Update
+
+        public static void ShowGuilds()
         {
-            Console.WriteLine("길드 이름을 입력하세요.");
-            Console.Write("> ");
-            string name = Console.ReadLine();
-
-            // AsNoTracking : ReadOnly의 의미 "읽기만 할 것이다" << Tracking Snapshot (이라고 db를 감시해서 변화가있는지 탐지하는 기능)을 무시하고 읽기만 한다!
-            // include : Eager Loading (즉시 로딩) << 나중에 알아볼 것 TODO
-            using (var db = new AppDbContext())
+            using (AppDbContext db = new AppDbContext())
             {
-                Guild guild = db.Guilds.AsNoTracking()
-                    .Where(g => g.GuildName == name)
-                    .Include(g => g.Members) // 그냥 Include는 1차원적. 여기서 g.Members만을 불러오는데 만약 player의 아이템까지 보고 싶다면 ThenInclude를 통해 접근 가능하다 (2차원적 접근)
-                        .ThenInclude(p => p.Item)
-                    .First(); //SELECT TOP 1
-
-                foreach (Player player in guild.Members) // owner도 같이 로딩해주세요!
+                foreach (var guild in db.Guilds.MapGuildToDto())
                 {
-                    Console.WriteLine($"ItemId : {player.Item.TemplateId},  Owner : {player.Name}");
+                    Console.WriteLine($" guild id : {guild.GuildId}, guild name : {guild.Name}, guild mCount : {guild.MemberCount}");
                 }
             }
         }
-
-        // 장점 : 필요한 시점에 필요한 것만 로딩 가능
-        // 단점 : DB 접근을 여러 번 해서 접근 비용이 비싸진다.
-        public static void ExplicitLoading()
+        // 장점 : 최소한의 정보로 Update 가능 (일반적으로 리로드 방식 사용)
+        // 단점 : Read 두 번 한다.
+        public static void UpdateByReload()
         {
-            Console.WriteLine("길드 이름을 입력하세요.");
-            Console.Write("> ");
+            ShowGuilds();
+
+            // 외부(클라) 에서 수정 원하는 데이터의 ID / 정보 넘겨줬다고 가정
+            Console.WriteLine("Input GuildId");
+            Console.WriteLine("> ");
+            int id = int.Parse(Console.ReadLine());
+            
+            Console.WriteLine("Input GuildName");
+            Console.WriteLine("> ");
             string name = Console.ReadLine();
 
-            using (var db = new AppDbContext())
+            using (AppDbContext db = new AppDbContext())
             {
-                // Explicit Loading을 할 때에는 AsNoTracking을 붙여주면 안된다. => 에러
-                Guild guild = db.Guilds
-                    .Where(g => g.GuildName == name)
-                    .First();
+                Guild guild = db.Find<Guild>(id);
+                guild.GuildName = name;
 
-                // 명시적
-                db.Entry(guild).Collection(g => g.Members).Load(); // guild 에 가서 g의 멤버들을 로드 해주세요!
-
-                foreach (Player player in guild.Members)
-                {
-                    db.Entry(player).Reference(p => p.Item).Load(); // player의 item도 로드 해주세요!
-                }
-
-                foreach (Player player in guild.Members)
-                {
-                    Console.WriteLine($"TemplateId : {player.Item.TemplateId} Owner {player.Name}");
-                }
+                db.SaveChanges();
             }
+
+            Console.WriteLine("--- Update Complete ----");
+            ShowGuilds();
         }
 
-        // 3) 특정 길드에 있는 길드원 수는?
-        // 장점 : 필요한 정보만 쏘옥~ 빼서 로딩
-        // 단점 : 일일히 select 안에 만들어줘야 함
-        public static void SelectLoading()
+        public static string MakeUpdateJsonStr()
         {
-            Console.WriteLine("길드 이름을 입력하세요.");
-            Console.Write("> ");
-            string name = Console.ReadLine();
-
-            using (var db = new AppDbContext())
-            {
-                var info = db.Guilds
-                    .Where(g => g.GuildName == name)
-                    .MapGuildToDto()
-                    .First();
-
-                Console.WriteLine($"GuildName {info.Name}, MemberCount {info.MemberCount}");
-            }
+            var jsonStr = "(\"GuildId\":1, \"GuildName\":\"Hello\", \"Members\":null)";
+            return jsonStr;
         }
+
+        // 장점 : DB에 다시 Read할 필요 없이 바로 Update
+        // 단점 : 모든 정보 필요, 보안 문제 (상대를 신용할 때 사용)
+        public static void UpdateByFull()
+        {
+            ShowGuilds();
+            string jsonStr = MakeUpdateJsonStr();
+            Guild guild = JsonConvert.DeserializeObject<Guild>(jsonStr);
+
+            using (AppDbContext db = new AppDbContext())
+            {
+                db.Guilds.Update(guild);
+                db.SaveChanges();
+            }
+
+            Console.WriteLine("--- Update Complete ----");
+            ShowGuilds();
+        }
+
+
     }
 }
