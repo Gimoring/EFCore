@@ -21,6 +21,7 @@ namespace EFCore
         // DbSet<Item> -> EF Core에게 알려준다
         // - Item이라는 DB Table 이 있는데, 세부적인 칼럼/키 정보는 Item 클래스를 참고하라.
         public DbSet<Item> Items { get; set; }
+        public DbSet<EventItem> EventItems { get; set; }
 
         // 간접적으로 접근하는 테이블은 굳이 만들어주지 않아도 알아서 EF Core에게 알려준다. => player 만들 필요 없음.
         public DbSet<Player> Players { get; set; }
@@ -34,6 +35,18 @@ namespace EFCore
         protected override void OnConfiguring(DbContextOptionsBuilder options)
         {
             options.UseSqlServer(ConnectionString);
+        }
+
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            // 앞으로 Item Entity에 접근할 때 항상 사용되는 모델 레벨(데이터모델)의 필터링
+            // 필터를 무시하고 싶으면 IngnoreQueryFilters 옵션 추가
+            builder.Entity<Item>().HasQueryFilter(i => i.SoftDeleted == false);
+
+            builder.Entity<Player>()
+                .HasIndex(p => p.Name)
+                .HasDatabaseName("Index_Person_Name")
+                .IsUnique();
         }
     }
 }

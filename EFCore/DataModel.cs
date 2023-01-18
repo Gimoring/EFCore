@@ -1,5 +1,7 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Text;
@@ -18,17 +20,27 @@ namespace EFCore
     // -- ex) class Player   + Player (Id) 
     // - 클래스 이름 = 테이블 이름 => Player
     // 1:다 관계에서 '다'인 쪽에서 FK를 가지고 있는데 어떤 플레이어에 소속되어있는지 FK로 참조한다.
-    [Table("Item")]
+
+
+    [Table("Items")]
     public class Item
     {
+        public bool SoftDeleted { get; set; } // 아이템이 삭제되었는지 아닌지
+
         public int ItemId { get; set; } // DB에서 관리하는 고유 Id (PK)
         public int TemplateId { get; set; } // 따로 데이터시트에 관리하는 Id ex) 집행검Id => 101번 
         public DateTime CreateDate { get; set; }
 
         // 다른 클래스 참조 => FK 로 관리 => 링크를 걸어서 다른 애를 참조하는 것을 Navigation property 라고 함.
-        // public int OwnerId { get; set; }
-        [ForeignKey("OwnerId")]
+        //[ForeignKey("OwnerId")]
+        public int OwnerId { get; set; }
         public Player Owner { get; set; }
+
+    }
+
+    public class EventItem : Item
+    {
+        public DateTime DestroyDate { get; set; }
     }
     
     // 플레이어 n 아이템 n
@@ -37,10 +49,14 @@ namespace EFCore
     {
         // class이름 + id => PK 
         public int PlayerId { get; set; }
+
+        [Required]
+        [MaxLength(20)]
+        // Alternate key
         public string Name { get; set; }
 
-        public Item Item { get; set; }
-        public Guild Guild { get; set; }
+        public Item OwnedItem { get; set; }
+        public Guild? Guild { get; set; }
     }
 
     // 길드 n 플레이어 m
